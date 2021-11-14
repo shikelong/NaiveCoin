@@ -46,11 +46,11 @@ export default class BlockChain {
     }
   };
 
-  getLastestBlock = function (): Block {
+  getLatestBlock = function (): Block {
     return this.blocks[this.blocks.length - 1];
   };
 
-  static generateNextBlock = function (blockData: string): Block {
+  generateNextBlock = function (blockData: string): Block {
     const previousBlock: Block = this.getLatestBlock();
     const nextIndex: number = previousBlock.index + 1;
     const nextTimestamp: number = new Date().getTime() / 1000;

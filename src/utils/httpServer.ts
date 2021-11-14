@@ -17,7 +17,7 @@ const initHttpServer = (port: number) => {
     res.send(blockChainInstance.getBlockChain());
   });
   app.post("/mineBlock", (req, res) => {
-    const newBlock: Block = BlockChain.generateNextBlock(req.body.data);
+    const newBlock: Block = blockChainInstance.generateNextBlock(req.body.data);
     res.send(newBlock);
   });
   app.get("/peers", (req, res) => {

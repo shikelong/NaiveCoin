@@ -73,7 +73,7 @@ const handleBlockchainResponse = (receivedBlocks: Block[]) => {
     console.log("block structuture not valid");
     return;
   }
-  const latestBlockHeld: Block = blockChainInstance.getLastestBlock();
+  const latestBlockHeld: Block = blockChainInstance.getLatestBlock();
   if (latestBlockReceived.index > latestBlockHeld.index) {
     console.log(
       "blockchain possibly behind. We got: " +
@@ -122,7 +122,7 @@ const responseChainMsg = (): Message => ({
 
 const responseLatestMsg = (): Message => ({
   type: MessageType.RESPONSE_BLOCKCHAIN,
-  data: JSON.stringify([blockChainInstance.getLastestBlock()]),
+  data: JSON.stringify([blockChainInstance.getLatestBlock()]),
 });
 
 const initErrorHandler = (ws: WebSocket) => {
@@ -146,6 +146,8 @@ const initConnection = (ws: WebSocket) => {
 };
 
 const connectToPeers = (newPeer: string): void => {
+
+  console.log('new Peer: ', newPeer)
   const ws: WebSocket = new WebSocket(newPeer);
   ws.on("open", () => {
     initConnection(ws);

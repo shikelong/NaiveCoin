@@ -11,5 +11,5 @@ export const calculateHash = (
 };
 
 export const calculateHashForBlock = (block: Block): string => {
-  return "";
+  return calculateHash(block.index, block.previousHash, block.timeStamp, block.data);
 };
