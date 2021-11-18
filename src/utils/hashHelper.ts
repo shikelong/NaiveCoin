@@ -5,11 +5,20 @@ export const calculateHash = (
   index: number,
   previousHash: string,
   timeStamp: number,
-  data: string
+  data: string,
+  difficulty: number,
+  nonce: number
 ): string => {
-  return CryptoJS.SHA256(index + previousHash + timeStamp + data).toString();
+  return CryptoJS.SHA256(index + previousHash + timeStamp + data + difficulty + nonce).toString();
 };
 
 export const calculateHashForBlock = (block: Block): string => {
-  return calculateHash(block.index, block.previousHash, block.timeStamp, block.data);
+  return calculateHash(
+    block.index,
+    block.previousHash,
+    block.timeStamp,
+    block.data,
+    block.difficulty,
+    block.nonce
+  );
 };

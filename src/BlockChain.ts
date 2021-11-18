@@ -1,6 +1,10 @@
 import Block from "./Block";
 import { calculateHash, calculateHashForBlock } from "./utils/hashHelper";
 import { broadcastLatest } from "./utils/p2p";
+import {
+  BLOCK_GENERATION_INTERVAL,
+  DIFFICULTY_ADJUSTMENT_INTERVAL,
+} from "./utils/consts";
 
 //创世区块
 //没有 previousHash
@@ -9,7 +13,9 @@ export const genesisBlock: Block = new Block(
   "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7",
   null,
   1465154705,
-  "I'm genesis block!"
+  "I'm genesis block!",
+  0,
+  0
 );
 
 export default class BlockChain {
@@ -34,7 +40,8 @@ export default class BlockChain {
   replaceChain = function (newBlocks: Block[]) {
     if (
       BlockChain.isValidChain(newBlocks) &&
-      newBlocks.length > this.getBlockChain().length
+      BlockChain.getAccumulatedDifficulty(newBlocks) >
+        BlockChain.getAccumulatedDifficulty(this.getBlockChain())
     ) {
       console.log(
         "Received blockchain is valid. Replacing current blockchain with received blockchain"
@@ -54,20 +61,56 @@ export default class BlockChain {
     const previousBlock: Block = this.getLatestBlock();
     const nextIndex: number = previousBlock.index + 1;
     const nextTimestamp: number = new Date().getTime() / 1000;
-    const nextHash: string = calculateHash(
+    const difficulty: number = BlockChain.getDifficulty(this.getBlockChain());
+
+    const newBlock: Block = this.findBlock(
       nextIndex,
       previousBlock.hash,
       nextTimestamp,
-      blockData
+      blockData,
+      difficulty
     );
-    const newBlock: Block = new Block(
-      nextIndex,
-      nextHash,
-      previousBlock.hash,
-      nextTimestamp,
-      blockData
-    );
+    this.addBlock(newBlock);
+    broadcastLatest();
     return newBlock;
+  };
+
+  addBlock = function (newBlock: Block) {
+    if (BlockChain.isValidNewBlock(newBlock, this.getLatestBlock())) {
+      this.blocks.push(newBlock);
+    }
+  };
+
+  findBlock = function (
+    index: number,
+    previousHash: string,
+    timestamp: number,
+    data: string,
+    difficulty: number
+  ): Block {
+    let nonce = 0;
+    while (true) {
+      const hash: string = calculateHash(
+        index,
+        previousHash,
+        timestamp,
+        data,
+        difficulty,
+        nonce
+      );
+      if (Block.hashMatchesDifficulty(hash, difficulty)) {
+        return new Block(
+          index,
+          hash,
+          previousHash,
+          timestamp,
+          data,
+          difficulty,
+          nonce
+        );
+      }
+      nonce++;
+    }
   };
 
   /**
@@ -114,6 +157,44 @@ export default class BlockChain {
     }
 
     return true;
+  };
+
+  static getDifficulty = function (blockChain: Block[]): number {
+    const latestBlock: Block = blockChain[blockChain.length - 1];
+    if (
+      latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 &&
+      latestBlock.index !== 0
+    ) {
+      return BlockChain.getAdjustedDifficulty(latestBlock, blockChain);
+    } else {
+      return latestBlock.difficulty;
+    }
+  };
+
+  static getAdjustedDifficulty = function (
+    latestBlock: Block,
+    blockChain: Block[]
+  ): number {
+    const prevAdjustmentBlock: Block =
+      blockChain[blockChain.length - DIFFICULTY_ADJUSTMENT_INTERVAL];
+    const timeExpected =
+      BLOCK_GENERATION_INTERVAL * DIFFICULTY_ADJUSTMENT_INTERVAL;
+    const timeTaken = latestBlock.timeStamp - prevAdjustmentBlock.timeStamp;
+    if (timeTaken < timeExpected / 2) {
+      return prevAdjustmentBlock.difficulty + 1;
+    } else if (timeTaken > timeExpected * 2) {
+      return prevAdjustmentBlock.difficulty - 1;
+    } else {
+      return prevAdjustmentBlock.difficulty;
+    }
+  };
+
+  static getAccumulatedDifficulty = function (blockChain: Block[]): number {
+    let accumulatedDifficulty = 0;
+    for (let i = blockChain.length - 1; i >= 0; i--) {
+      accumulatedDifficulty += Math.pow(2, blockChain[i].difficulty);
+    }
+    return accumulatedDifficulty;
   };
 }
 
