@@ -1,6 +1,8 @@
+import { Transaction } from "./transaction";
+
 export default class Block {
   public index: number;
-  public data: string;
+  public data: Transaction[];
   public previousHash: string;
   public hash: string;
   public timeStamp: number;
@@ -12,7 +14,7 @@ export default class Block {
     hash: string,
     previousHash: string,
     timeStamp: number,
-    data: string,
+    data: Transaction[],
     difficulty: number,
     nonce: number
   ) {

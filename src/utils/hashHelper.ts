@@ -1,11 +1,12 @@
 import * as CryptoJS from "crypto-js";
 import Block from "../Block";
+import { Transaction } from "../Transaction";
 
 export const calculateHash = (
   index: number,
   previousHash: string,
   timeStamp: number,
-  data: string,
+  data: Transaction[],
   difficulty: number,
   nonce: number
 ): string => {

@@ -5,6 +5,7 @@ import {
   BLOCK_GENERATION_INTERVAL,
   DIFFICULTY_ADJUSTMENT_INTERVAL,
 } from "./utils/consts";
+import { UnspentTxOut, Transaction, processTransactions } from "./transaction";
 
 //创世区块
 //没有 previousHash
@@ -13,13 +14,14 @@ export const genesisBlock: Block = new Block(
   "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7",
   null,
   1465154705,
-  "I'm genesis block!",
+  [],
   0,
   0
 );
 
 export default class BlockChain {
   private blocks: Block[];
+  private unspentTxOuts: UnspentTxOut[] = [];
 
   constructor() {
     this.blocks = [genesisBlock];
@@ -31,8 +33,18 @@ export default class BlockChain {
 
   addBlockToChain = function (newBlock: Block) {
     if (BlockChain.isValidNewBlock(newBlock, this.getLatestBlock())) {
-      this.blocks.push(newBlock);
-      return true;
+      const retVal = processTransactions(
+        newBlock.data,
+        this.unspentTxOuts,
+        newBlock.index
+      );
+
+      if (retVal === null) {
+        return false;
+      } else {
+        this.blocks.push(newBlock);
+        return true;
+      }
     }
     return false;
   };
@@ -57,7 +69,7 @@ export default class BlockChain {
     return this.blocks[this.blocks.length - 1];
   };
 
-  generateNextBlock = function (blockData: string): Block {
+  generateNextBlock = function (blockData: Transaction[]): Block {
     const previousBlock: Block = this.getLatestBlock();
     const nextIndex: number = previousBlock.index + 1;
     const nextTimestamp: number = new Date().getTime() / 1000;
@@ -70,22 +82,18 @@ export default class BlockChain {
       blockData,
       difficulty
     );
-    this.addBlock(newBlock);
-    broadcastLatest();
-    return newBlock;
-  };
-
-  addBlock = function (newBlock: Block) {
-    if (BlockChain.isValidNewBlock(newBlock, this.getLatestBlock())) {
-      this.blocks.push(newBlock);
+    if (this.addBlockToChain(newBlock)) {
+      broadcastLatest();
+      return newBlock;
     }
+    return null;
   };
 
   findBlock = function (
     index: number,
     previousHash: string,
     timestamp: number,
-    data: string,
+    data: Transaction[],
     difficulty: number
   ): Block {
     let nonce = 0;
@@ -130,7 +138,16 @@ export default class BlockChain {
     } else if (previousBlock.hash !== newBlock.previousHash) {
       console.error("new Block's previousHash is invalid");
       return false;
-    } else if (calculateHashForBlock(newBlock) !== newBlock.hash) {
+    }
+    //jump this step for test.
+    // else if (
+    //   previousBlock.timeStamp - 60 < newBlock.timeStamp &&
+    //   newBlock.timeStamp - 60 < getCurrentTimeStamp()
+    // ) {
+    //   console.error("invalid timestamp");
+    //   return false;
+    // }
+    else if (calculateHashForBlock(newBlock) !== newBlock.hash) {
       console.error(
         `new Block\'s hash is invalid, calculate is ${calculateHashForBlock(
           newBlock
@@ -197,5 +214,9 @@ export default class BlockChain {
     return accumulatedDifficulty;
   };
 }
+
+const getCurrentTimeStamp = () => {
+  return Math.round(new Date().getTime() / 1000);
+};
 
 export const blockChainInstance = new BlockChain();
