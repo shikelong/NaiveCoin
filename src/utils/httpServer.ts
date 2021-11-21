@@ -33,6 +33,19 @@ const initHttpServer = (port: number) => {
     res.send();
   });
 
+  app.post('/mineRawBlock', (req, res) => {
+    if (req.body.data == null) {
+      res.send('data parameter is missing');
+      return;
+    }
+    const newBlock: Block = blockChainInstance.generateRawNextBlock(req.body.data);
+    if (newBlock === null) {
+      res.status(400).send('could not generate block');
+    } else {
+      res.send(newBlock);
+    }
+  });
+
   app.get("/balance", (req, res) => {
     const balance = getBalance(
       req.body.address,
