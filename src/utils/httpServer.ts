@@ -4,6 +4,7 @@ import Block from "../Block";
 import BlockChain from "../BlockChain";
 import { connectToPeers, getSockets, initP2PServer } from "./p2p";
 import { blockChainInstance } from "../BlockChain";
+import { getBalance, initWallet } from "../wallet";
 
 const httpPort: number = parseInt(process.env.HTTP_PORT) || 3001;
 const p2pPort: number = parseInt(process.env.P2P_PORT) || 6001;
@@ -32,6 +33,29 @@ const initHttpServer = (port: number) => {
     res.send();
   });
 
+  app.get("/balance", (req, res) => {
+    const balance = getBalance(
+      req.body.address,
+      blockChainInstance.getUnspentTxOuts()
+    );
+    res.send({ balance });
+  });
+
+  app.get("/mineTransaction", (req, res) => {
+    const address = req.body.address;
+    const amount = req.body.amount;
+
+    try {
+      const newBlock = blockChainInstance.generateNextBlockWithTransaction(
+        address,
+        amount
+      );
+      res.send(newBlock)
+    } catch (e) {
+      res.status(400).send(e.message);
+    }
+  });
+
   app.listen(port, () => {
     console.log("Listening http on port: " + port);
   });
@@ -39,3 +63,4 @@ const initHttpServer = (port: number) => {
 
 initHttpServer(httpPort);
 initP2PServer(p2pPort);
+initWallet();

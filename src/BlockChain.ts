@@ -5,7 +5,18 @@ import {
   BLOCK_GENERATION_INTERVAL,
   DIFFICULTY_ADJUSTMENT_INTERVAL,
 } from "./utils/consts";
-import { UnspentTxOut, Transaction, processTransactions } from "./transaction";
+import {
+  UnspentTxOut,
+  Transaction,
+  processTransactions,
+  isValidAddress,
+  getCoinbaseTransaction,
+} from "./transaction";
+import {
+  createTransaction,
+  getPrivateFromWallet,
+  getPublicFromWallet,
+} from "./wallet";
 
 //创世区块
 //没有 previousHash
@@ -67,6 +78,10 @@ export default class BlockChain {
 
   getLatestBlock = function (): Block {
     return this.blocks[this.blocks.length - 1];
+  };
+
+  getUnspentTxOuts = function () {
+    return this.unspentTxOuts;
   };
 
   generateNextBlock = function (blockData: Transaction[]): Block {
@@ -212,6 +227,53 @@ export default class BlockChain {
       accumulatedDifficulty += Math.pow(2, blockChain[i].difficulty);
     }
     return accumulatedDifficulty;
+  };
+
+  generateNextBlockWithTransaction = function (
+    receiverAddress: string,
+    amount: number
+  ) {
+    if (!isValidAddress(receiverAddress)) {
+      throw new Error("invalid address");
+    }
+    if (amount < 0 || typeof amount !== "number") {
+      throw new Error("invalid amount");
+    }
+
+    const coinbaseTx = getCoinbaseTransaction(
+      getPublicFromWallet(),
+      this.getLatestBlock().index + 1
+    );
+    const tx: Transaction = createTransaction(
+      receiverAddress,
+      amount,
+      getPrivateFromWallet(),
+      this.getUnspentTxOuts()
+    );
+
+    const blockData: Transaction[] = [coinbaseTx, tx];
+
+    return this.generateRawNextBlock(blockData);
+  };
+
+  generateRawNextBlock = (blockData: Transaction[]) => {
+    const previousBlock: Block = this.getLatestBlock();
+    const difficulty: number = BlockChain.getDifficulty(this.getBlockChain());
+    const nextIndex: number = previousBlock.index + 1;
+    const nextTimestamp: number = getCurrentTimeStamp();
+    const newBlock: Block = this.findBlock(
+      nextIndex,
+      previousBlock.hash,
+      nextTimestamp,
+      blockData,
+      difficulty
+    );
+    if (this.addBlockToChain(newBlock)) {
+      broadcastLatest();
+      return newBlock;
+    } else {
+      return null;
+    }
   };
 }
 
