@@ -16,7 +16,7 @@ const initHttpServer = (port: number) => {
   app.use(bodyParser.json());
 
   app.get("/blocks", (req, res) => {
-    res.send(blockChainInstance.getBlockChain());
+    res.send(blockChainInstance.blocks);
   });
   app.post("/mineBlock", (req, res) => {
     const newBlock: Block = blockChainInstance.generateNextBlock(req.body.data);
@@ -52,7 +52,7 @@ const initHttpServer = (port: number) => {
   app.get("/balance", (req, res) => {
     const balance = getBalance(
       req.body.address,
-      blockChainInstance.getUnspentTxOuts()
+      blockChainInstance.unspentTxOuts
     );
     res.send({ balance });
   });

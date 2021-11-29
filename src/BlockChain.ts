@@ -4,13 +4,14 @@ import { broadcastLatest, broadCastTransactionPool } from "./utils/p2p";
 import {
   BLOCK_GENERATION_INTERVAL,
   DIFFICULTY_ADJUSTMENT_INTERVAL,
+  GENESIS_BLOCK,
 } from "./utils/consts";
 import {
-  UnspentTxOut,
-  Transaction,
-  processTransactions,
-  isValidAddress,
   getCoinbaseTransaction,
+  isValidAddress,
+  processTransactions,
+  Transaction,
+  UnspentTxOut,
 } from "./transaction";
 import {
   createTransaction,
@@ -22,40 +23,37 @@ import {
   getTransactionPool,
   updateTransactionPool,
 } from "./transactionPool";
-
-//创世区块
-//没有 previousHash
-export const genesisBlock: Block = new Block(
-  0,
-  "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7",
-  null,
-  1465154705,
-  [],
-  0,
-  0
-);
+import { getCurrentTimeStamp } from "./utils/utils";
+import _ from "lodash";
 
 export default class BlockChain {
-  private blocks: Block[];
-  private unspentTxOuts: UnspentTxOut[] = [];
+  private _blocks: Block[];
+  private _unspentTxOuts: UnspentTxOut[] = [];
 
   constructor() {
-    this.blocks = [genesisBlock];
+    this._blocks = [GENESIS_BLOCK];
   }
 
-  getBlockChain = function () {
-    return this.blocks;
-  };
+  get blocks() {
+    return this._blocks;
+  }
 
-  setUnspentTxOuts = function (newUnSpentTxOutput: UnspentTxOut[]) {
-    this.unspentTxOuts = newUnSpentTxOutput;
-  };
+  set blocks(v) {
+    this._blocks = v;
+  }
 
-  addBlockToChain = function (newBlock: Block) {
+  get unspentTxOuts() {
+    return this._unspentTxOuts;
+  }
+  set unspentTxOuts(v) {
+    this._unspentTxOuts = v;
+  }
+
+  public appendBlock(newBlock: Block) {
     if (BlockChain.isValidNewBlock(newBlock, this.getLatestBlock())) {
       const retVal = processTransactions(
         newBlock.data,
-        this.unspentTxOuts,
+        this._unspentTxOuts,
         newBlock.index
       );
 
@@ -63,60 +61,55 @@ export default class BlockChain {
         return false;
       } else {
         this.blocks.push(newBlock);
-        this.setUnspentTxOuts(retVal);
-        updateTransactionPool(this.unspentTxOuts);
+        this.unspentTxOuts = retVal;
+        updateTransactionPool(this._unspentTxOuts);
         return true;
       }
     }
     return false;
-  };
+  }
 
-  replaceChain = function (newBlocks: Block[]) {
-    const aUnspentTxOuts = this.isValidChain(newBlocks);
+  public replaceChain(newBlocks: Block[]) {
+    const aUnspentTxOuts = BlockChain.isValidChain(newBlocks);
     const validChain: boolean = aUnspentTxOuts !== null;
     if (
       BlockChain.isValidChain(newBlocks) &&
-      BlockChain.getAccumulatedDifficulty(newBlocks) >
-        BlockChain.getAccumulatedDifficulty(this.getBlockChain())
+      this.getAccumulatedDifficulty(newBlocks) > this.getAccumulatedDifficulty()
     ) {
       console.log(
         "Received blockchain is valid. Replacing current blockchain with received blockchain"
       );
       this.blocks = newBlocks;
-      this.setUnspentTxOuts(aUnspentTxOuts);
-      updateTransactionPool(this.unspentTxOuts);
+      this.unspentTxOuts = aUnspentTxOuts;
+      updateTransactionPool(this._unspentTxOuts);
       broadcastLatest();
     } else {
       console.log("received blockchain invalid");
     }
-  };
+  }
 
-  getLatestBlock = function (): Block {
+  public getLatestBlock(): Block {
     return this.blocks[this.blocks.length - 1];
-  };
+  }
 
-  sendTransaction = function (address: string, amount: number): Transaction {
+  public sendTransaction(address: string, amount: number): Transaction {
     const tx: Transaction = createTransaction(
       address,
       amount,
       getPrivateFromWallet(),
-      this.getUnspentTxOuts(),
+      this.unspentTxOuts,
       getTransactionPool()
     );
-    addToTransactionPool(tx, this.getUnspentTxOuts());
+    addToTransactionPool(tx, this.unspentTxOuts);
     broadCastTransactionPool();
     return tx;
-  };
+  }
 
-  getUnspentTxOuts = function () {
-    return this.unspentTxOuts;
-  };
-
-  generateNextBlock = function (blockData: Transaction[]): Block {
+  public generateNextBlock(blockData: Transaction[]): Block {
     const previousBlock: Block = this.getLatestBlock();
     const nextIndex: number = previousBlock.index + 1;
     const nextTimestamp: number = new Date().getTime() / 1000;
-    const difficulty: number = BlockChain.getDifficulty(this.getBlockChain());
+    const difficulty: number = this.getDifficulty();
 
     const newBlock: Block = this.findBlock(
       nextIndex,
@@ -125,36 +118,50 @@ export default class BlockChain {
       blockData,
       difficulty
     );
-    if (this.addBlockToChain(newBlock)) {
+    if (this.appendBlock(newBlock)) {
       broadcastLatest();
       return newBlock;
     }
     return null;
-  };
+  }
 
-  findBlock = function (
-    index: number,
-    previousHash: string,
-    timestamp: number,
-    data: Transaction[],
-    difficulty: number
-  ): Block {
+  /**
+   * calc hash function many times to Find a block match difficulty
+   * @param index
+   * @param previousHash
+   * @param timestamp
+   * @param data
+   * @param difficulty
+   * @private
+   */
+  private findBlock(data: Transaction[]): Block {
+    const latestBlock: Block = this.getLatestBlock();
+    const difficulty: number = this.getDifficulty();
+    const nextIndex: number = latestBlock.index + 1;
+    const timeStamp: number = getCurrentTimeStamp();
+
+    const fixedParams = {
+      index: nextIndex,
+      previousHash: latestBlock.hash,
+      timeStamp: timeStamp,
+      data: data,
+      difficulty: difficulty,
+    };
+
     let nonce = 0;
     while (true) {
       const hash: string = calculateHash(
-        index,
-        previousHash,
-        timestamp,
-        data,
-        difficulty,
-        nonce
+        {
+          ...fixedParams,
+          nonce
+        }
       );
       if (Block.hashMatchesDifficulty(hash, difficulty)) {
         return new Block(
-          index,
+          nextIndex,
           hash,
-          previousHash,
-          timestamp,
+          latestBlock.hash,
+          timeStamp,
           data,
           difficulty,
           nonce
@@ -162,11 +169,11 @@ export default class BlockChain {
       }
       nonce++;
     }
-  };
+  }
 
-  handleReceivedTransaction = function (transaction: Transaction) {
-    addToTransactionPool(transaction, this.getUnspentTxOuts());
-  };
+  public handleReceivedTransaction(transaction: Transaction) {
+    addToTransactionPool(transaction, this.unspentTxOuts);
+  }
 
   /**
    * judge is newBlock is valid.
@@ -207,7 +214,7 @@ export default class BlockChain {
 
   static isValidChain = function (blockChain: Block[]): UnspentTxOut[] {
     const isValidGenesis = (block: Block) => {
-      return JSON.stringify(block) === JSON.stringify(genesisBlock);
+      return JSON.stringify(block) === JSON.stringify(GENESIS_BLOCK);
     };
 
     if (!isValidGenesis(blockChain[0])) {
@@ -236,19 +243,19 @@ export default class BlockChain {
     return aUnspentTxOuts;
   };
 
-  static getDifficulty = function (blockChain: Block[]): number {
-    const latestBlock: Block = blockChain[blockChain.length - 1];
+  private getDifficulty(): number {
+    const latestBlock: Block = this.getLatestBlock();
     if (
       latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 &&
       latestBlock.index !== 0
     ) {
-      return BlockChain.getAdjustedDifficulty(latestBlock, blockChain);
+      return BlockChain.getAdjustedDifficulty(latestBlock, this.blocks);
     } else {
       return latestBlock.difficulty;
     }
-  };
+  }
 
-  static getAdjustedDifficulty = function (
+  private static getAdjustedDifficulty(
     latestBlock: Block,
     blockChain: Block[]
   ): number {
@@ -264,17 +271,17 @@ export default class BlockChain {
     } else {
       return prevAdjustmentBlock.difficulty;
     }
-  };
+  }
 
-  static getAccumulatedDifficulty = function (blockChain: Block[]): number {
+  private getAccumulatedDifficulty(blockChain = this.blocks): number {
     let accumulatedDifficulty = 0;
     for (let i = blockChain.length - 1; i >= 0; i--) {
       accumulatedDifficulty += Math.pow(2, blockChain[i].difficulty);
     }
     return accumulatedDifficulty;
-  };
+  }
 
-  generateNextBlockWithTransaction = function (
+  public generateNextBlockWithTransaction(
     receiverAddress: string,
     amount: number
   ) {
@@ -293,18 +300,18 @@ export default class BlockChain {
       receiverAddress,
       amount,
       getPrivateFromWallet(),
-      this.getUnspentTxOuts(),
+      this.unspentTxOuts,
       getTransactionPool()
     );
 
     const blockData: Transaction[] = [coinbaseTx, tx];
 
     return this.generateRawNextBlock(blockData);
-  };
+  }
 
-  generateRawNextBlock = (blockData: Transaction[]) => {
+  public generateRawNextBlock(blockData: Transaction[]) {
     const previousBlock: Block = this.getLatestBlock();
-    const difficulty: number = BlockChain.getDifficulty(this.getBlockChain());
+    const difficulty: number = this.getDifficulty();
     const nextIndex: number = previousBlock.index + 1;
     const nextTimestamp: number = getCurrentTimeStamp();
     const newBlock: Block = this.findBlock(
@@ -314,17 +321,13 @@ export default class BlockChain {
       blockData,
       difficulty
     );
-    if (this.addBlockToChain(newBlock)) {
+    if (this.appendBlock(newBlock)) {
       broadcastLatest();
       return newBlock;
     } else {
       return null;
     }
-  };
+  }
 }
-
-const getCurrentTimeStamp = () => {
-  return Math.round(new Date().getTime() / 1000);
-};
 
 export const blockChainInstance = new BlockChain();

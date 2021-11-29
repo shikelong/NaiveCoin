@@ -109,7 +109,7 @@ const handleBlockchainResponse = (receivedBlocks: Block[]) => {
         latestBlockReceived.index
     );
     if (latestBlockHeld.hash === latestBlockReceived.previousHash) {
-      if (blockChainInstance.addBlockToChain(latestBlockReceived)) {
+      if (blockChainInstance.appendBlock(latestBlockReceived)) {
         broadcast(responseLatestMsg());
       }
     } else if (receivedBlocks.length === 1) {
@@ -144,7 +144,7 @@ const queryAllMsg = (): Message => ({
 
 const responseChainMsg = (): Message => ({
   type: MessageType.RESPONSE_BLOCKCHAIN,
-  data: JSON.stringify(blockChainInstance.getBlockChain()),
+  data: JSON.stringify(blockChainInstance.blocks),
 });
 
 const responseLatestMsg = (): Message => ({

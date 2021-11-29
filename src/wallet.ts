@@ -73,7 +73,10 @@ const findTxOutputsForAmount = (
   throw new Error("Not enough funds");
 };
 
-const filterTxPoolTxs = (unspentTxOuts: UnspentTxOut[], transactionPool: Transaction[]): UnspentTxOut[] => {
+const filterTxPoolTxs = (
+  unspentTxOuts: UnspentTxOut[],
+  transactionPool: Transaction[]
+): UnspentTxOut[] => {
   const txIns: TxIn[] = _.chain(transactionPool)
     .map((tx: Transaction) => tx.txIns)
     .flatten()
@@ -81,11 +84,13 @@ const filterTxPoolTxs = (unspentTxOuts: UnspentTxOut[], transactionPool: Transac
   const removable: UnspentTxOut[] = [];
   for (const unspentTxOut of unspentTxOuts) {
     const txIn = _.find(txIns, (aTxIn: TxIn) => {
-      return aTxIn.txOutIndex === unspentTxOut.txOutIndex && aTxIn.txOutId === unspentTxOut.txOutId;
+      return (
+        aTxIn.txOutIndex === unspentTxOut.txOutIndex &&
+        aTxIn.txOutId === unspentTxOut.txOutId
+      );
     });
 
     if (txIn === undefined) {
-
     } else {
       removable.push(unspentTxOut);
     }
@@ -160,5 +165,5 @@ export {
   getBalance,
   generatePrivateKey,
   initWallet,
-  filterTxPoolTxs
+  filterTxPoolTxs,
 };
