@@ -12,7 +12,7 @@ import {
 } from "./transaction";
 
 const EC = new ec("secp256k1");
-const privateKeyLocation = "node/wallet/private_key";
+const privateKeyLocation = "./private_key";
 
 const getPrivateFromWallet = (): string => {
   const buffer = readFileSync(privateKeyLocation, "utf8");
@@ -73,6 +73,27 @@ const findTxOutputsForAmount = (
   throw new Error("Not enough funds");
 };
 
+const filterTxPoolTxs = (unspentTxOuts: UnspentTxOut[], transactionPool: Transaction[]): UnspentTxOut[] => {
+  const txIns: TxIn[] = _.chain(transactionPool)
+    .map((tx: Transaction) => tx.txIns)
+    .flatten()
+    .value();
+  const removable: UnspentTxOut[] = [];
+  for (const unspentTxOut of unspentTxOuts) {
+    const txIn = _.find(txIns, (aTxIn: TxIn) => {
+      return aTxIn.txOutIndex === unspentTxOut.txOutIndex && aTxIn.txOutId === unspentTxOut.txOutId;
+    });
+
+    if (txIn === undefined) {
+
+    } else {
+      removable.push(unspentTxOut);
+    }
+  }
+
+  return _.without(unspentTxOuts, ...removable);
+};
+
 const createTxOuts = (
   receiverAddress: string,
   myAddress: string,
@@ -90,17 +111,21 @@ const createTransaction = (
   receiverAddress: string,
   amount: number,
   privateKey: string,
-  unspentTxOuts: UnspentTxOut[]
+  unspentTxOuts: UnspentTxOut[],
+  txPool: Transaction[]
 ): Transaction => {
+  console.log("txPool: %s", JSON.stringify(txPool));
   const tx = new Transaction();
   const senderAddress = getPublicKey(privateKey);
   const senderUnspentTxOuts = unspentTxOuts.filter(
     (utxo) => utxo.address === senderAddress
   );
 
+  const UnSentTxOuts = filterTxPoolTxs(senderUnspentTxOuts, txPool);
+
   const { includedUnspentTxOuts, leftOverAmount } = findTxOutputsForAmount(
     amount,
-    senderUnspentTxOuts
+    UnSentTxOuts
   );
 
   const unSignedTxIns = includedUnspentTxOuts.map((utxo) => {
@@ -135,4 +160,5 @@ export {
   getBalance,
   generatePrivateKey,
   initWallet,
+  filterTxPoolTxs
 };

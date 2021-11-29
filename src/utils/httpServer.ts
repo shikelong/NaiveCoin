@@ -5,6 +5,7 @@ import BlockChain from "../BlockChain";
 import { connectToPeers, getSockets, initP2PServer } from "./p2p";
 import { blockChainInstance } from "../BlockChain";
 import { getBalance, initWallet } from "../wallet";
+import { getTransactionPool } from "../transactionPool";
 
 const httpPort: number = parseInt(process.env.HTTP_PORT) || 3001;
 const p2pPort: number = parseInt(process.env.P2P_PORT) || 6001;
@@ -33,14 +34,16 @@ const initHttpServer = (port: number) => {
     res.send();
   });
 
-  app.post('/mineRawBlock', (req, res) => {
+  app.post("/mineRawBlock", (req, res) => {
     if (req.body.data == null) {
-      res.send('data parameter is missing');
+      res.send("data parameter is missing");
       return;
     }
-    const newBlock: Block = blockChainInstance.generateRawNextBlock(req.body.data);
+    const newBlock: Block = blockChainInstance.generateRawNextBlock(
+      req.body.data
+    );
     if (newBlock === null) {
-      res.status(400).send('could not generate block');
+      res.status(400).send("could not generate block");
     } else {
       res.send(newBlock);
     }
@@ -54,7 +57,7 @@ const initHttpServer = (port: number) => {
     res.send({ balance });
   });
 
-  app.get("/mineTransaction", (req, res) => {
+  app.post("/mineTransaction", (req, res) => {
     const address = req.body.address;
     const amount = req.body.amount;
 
@@ -63,10 +66,35 @@ const initHttpServer = (port: number) => {
         address,
         amount
       );
-      res.send(newBlock)
+      res.send(newBlock);
     } catch (e) {
       res.status(400).send(e.message);
     }
+  });
+
+  app.post("/sendTransaction", (req, res) => {
+    try {
+      const address = req.body.address;
+      const amount = req.body.amount;
+
+      if (address === undefined || amount === undefined) {
+        throw Error("invalid address or amount");
+      }
+      const resp = blockChainInstance.sendTransaction(address, amount);
+      res.send(resp);
+    } catch (e) {
+      console.log(e.message);
+      res.status(400).send(e.message);
+    }
+  });
+
+  app.get("/transactionPool", (req, res) => {
+    res.send(getTransactionPool());
+  });
+
+  app.post("/stop", (req, res) => {
+    res.send({ msg: "stopping server" });
+    process.exit();
   });
 
   app.listen(port, () => {

@@ -1,6 +1,6 @@
 import Block from "./Block";
 import { calculateHash, calculateHashForBlock } from "./utils/hashHelper";
-import { broadcastLatest } from "./utils/p2p";
+import { broadcastLatest, broadCastTransactionPool } from "./utils/p2p";
 import {
   BLOCK_GENERATION_INTERVAL,
   DIFFICULTY_ADJUSTMENT_INTERVAL,
@@ -17,6 +17,11 @@ import {
   getPrivateFromWallet,
   getPublicFromWallet,
 } from "./wallet";
+import {
+  addToTransactionPool,
+  getTransactionPool,
+  updateTransactionPool,
+} from "./transactionPool";
 
 //创世区块
 //没有 previousHash
@@ -42,6 +47,10 @@ export default class BlockChain {
     return this.blocks;
   };
 
+  setUnspentTxOuts = function (newUnSpentTxOutput: UnspentTxOut[]) {
+    this.unspentTxOuts = newUnSpentTxOutput;
+  };
+
   addBlockToChain = function (newBlock: Block) {
     if (BlockChain.isValidNewBlock(newBlock, this.getLatestBlock())) {
       const retVal = processTransactions(
@@ -54,6 +63,8 @@ export default class BlockChain {
         return false;
       } else {
         this.blocks.push(newBlock);
+        this.setUnspentTxOuts(retVal);
+        updateTransactionPool(this.unspentTxOuts);
         return true;
       }
     }
@@ -61,6 +72,8 @@ export default class BlockChain {
   };
 
   replaceChain = function (newBlocks: Block[]) {
+    const aUnspentTxOuts = this.isValidChain(newBlocks);
+    const validChain: boolean = aUnspentTxOuts !== null;
     if (
       BlockChain.isValidChain(newBlocks) &&
       BlockChain.getAccumulatedDifficulty(newBlocks) >
@@ -70,6 +83,8 @@ export default class BlockChain {
         "Received blockchain is valid. Replacing current blockchain with received blockchain"
       );
       this.blocks = newBlocks;
+      this.setUnspentTxOuts(aUnspentTxOuts);
+      updateTransactionPool(this.unspentTxOuts);
       broadcastLatest();
     } else {
       console.log("received blockchain invalid");
@@ -78,6 +93,19 @@ export default class BlockChain {
 
   getLatestBlock = function (): Block {
     return this.blocks[this.blocks.length - 1];
+  };
+
+  sendTransaction = function (address: string, amount: number): Transaction {
+    const tx: Transaction = createTransaction(
+      address,
+      amount,
+      getPrivateFromWallet(),
+      this.getUnspentTxOuts(),
+      getTransactionPool()
+    );
+    addToTransactionPool(tx, this.getUnspentTxOuts());
+    broadCastTransactionPool();
+    return tx;
   };
 
   getUnspentTxOuts = function () {
@@ -136,6 +164,10 @@ export default class BlockChain {
     }
   };
 
+  handleReceivedTransaction = function (transaction: Transaction) {
+    addToTransactionPool(transaction, this.getUnspentTxOuts());
+  };
+
   /**
    * judge is newBlock is valid.
    * 1. new Block's index must == previousBlock.index + 1
@@ -173,22 +205,35 @@ export default class BlockChain {
     return true;
   };
 
-  static isValidChain = function (blockChain: Block[]): boolean {
+  static isValidChain = function (blockChain: Block[]): UnspentTxOut[] {
     const isValidGenesis = (block: Block) => {
       return JSON.stringify(block) === JSON.stringify(genesisBlock);
     };
 
     if (!isValidGenesis(blockChain[0])) {
-      return false;
+      return null;
     }
+
+    let aUnspentTxOuts: UnspentTxOut[] = [];
 
     for (let i = 1; i < blockChain.length; i++) {
       if (!BlockChain.isValidNewBlock(blockChain[i], blockChain[i - 1])) {
-        return false;
+        return null;
+      }
+
+      aUnspentTxOuts = processTransactions(
+        blockChain[i].data,
+        aUnspentTxOuts,
+        blockChain[i].index
+      );
+
+      if (aUnspentTxOuts === null) {
+        console.log("invalid transactions in blockchain");
+        return null;
       }
     }
 
-    return true;
+    return aUnspentTxOuts;
   };
 
   static getDifficulty = function (blockChain: Block[]): number {
@@ -248,7 +293,8 @@ export default class BlockChain {
       receiverAddress,
       amount,
       getPrivateFromWallet(),
-      this.getUnspentTxOuts()
+      this.getUnspentTxOuts(),
+      getTransactionPool()
     );
 
     const blockData: Transaction[] = [coinbaseTx, tx];

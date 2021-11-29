@@ -64,7 +64,7 @@ const getTransactionId = (transaction: Transaction): string => {
   return CryptoJS.SHA256(txInContent + txOutContent).toString();
 };
 
-const validateTransaction = (
+export const validateTransaction = (
   transaction: Transaction,
   aUnspentTxOuts: UnspentTxOut[]
 ): boolean => {

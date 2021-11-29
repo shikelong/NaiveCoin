@@ -1,6 +1,8 @@
 import WebSocket, { Server } from "ws";
 import { blockChainInstance } from "../BlockChain";
 import Block from "../Block";
+import { Transaction } from "../Transaction";
+import { getTransactionPool } from "../transactionPool";
 
 const sockets: WebSocket[] = [];
 
@@ -8,6 +10,8 @@ enum MessageType {
   QUERY_LATEST = 0,
   QUERY_ALL = 1,
   RESPONSE_BLOCKCHAIN = 2,
+  QUERY_TRANSACTION_POOL = 3,
+  RESPONSE_TRANSACTION_POOL = 4,
 }
 
 class Message {
@@ -59,6 +63,29 @@ const initMessageHandler = (ws: WebSocket) => {
         }
         handleBlockchainResponse(receivedBlocks);
         break;
+      case MessageType.QUERY_TRANSACTION_POOL:
+        write(ws, responseTransactionPoolMsg());
+        break;
+      case MessageType.RESPONSE_TRANSACTION_POOL:
+        const receivedTransactions: Transaction[] = JSONToObject<Transaction[]>(
+          message.data
+        );
+        if (receivedTransactions === null) {
+          console.log(
+            "invalid transaction received: %s",
+            JSON.stringify(message.data)
+          );
+          break;
+        }
+
+        receivedTransactions.forEach((transaction) => {
+          try {
+            blockChainInstance.handleReceivedTransaction(transaction);
+            broadCastTransactionPool();
+          } catch (e) {
+            console.log(e.message);
+          }
+        });
     }
   });
 };
@@ -125,6 +152,16 @@ const responseLatestMsg = (): Message => ({
   data: JSON.stringify([blockChainInstance.getLatestBlock()]),
 });
 
+const queryTransactionPoolMsg = (): Message => ({
+  type: MessageType.QUERY_TRANSACTION_POOL,
+  data: null,
+});
+
+const responseTransactionPoolMsg = (): Message => ({
+  type: MessageType.RESPONSE_TRANSACTION_POOL,
+  data: JSON.stringify(getTransactionPool()),
+});
+
 const initErrorHandler = (ws: WebSocket) => {
   const closeConnection = (myWs: WebSocket) => {
     console.log("connection failed to peer: " + myWs.url);
@@ -146,8 +183,7 @@ const initConnection = (ws: WebSocket) => {
 };
 
 const connectToPeers = (newPeer: string): void => {
-
-  console.log('new Peer: ', newPeer)
+  console.log("new Peer: ", newPeer);
   const ws: WebSocket = new WebSocket(newPeer);
   ws.on("open", () => {
     initConnection(ws);
@@ -157,6 +193,15 @@ const connectToPeers = (newPeer: string): void => {
   });
 };
 
+const broadCastTransactionPool = () => {
+  broadcast(responseTransactionPoolMsg());
+};
 const getSockets = () => sockets;
 
-export { connectToPeers, broadcastLatest, initP2PServer, getSockets };
+export {
+  connectToPeers,
+  broadcastLatest,
+  initP2PServer,
+  getSockets,
+  broadCastTransactionPool,
+};
