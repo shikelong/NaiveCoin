@@ -1,11 +1,10 @@
 import express from "express";
 import bodyParser from "body-parser";
 import Block from "../Block";
-import BlockChain from "../BlockChain";
 import { connectToPeers, getSockets, initP2PServer } from "./p2p";
 import { blockChainInstance } from "../BlockChain";
-import { getBalance, initWallet } from "../wallet";
-import { getTransactionPool } from "../transactionPool";
+import Wallet, { getBalance } from "../transaction/Wallet";
+import { getTransactionPool } from "../transaction/TransactionPool";
 
 const httpPort: number = parseInt(process.env.HTTP_PORT) || 3001;
 const p2pPort: number = parseInt(process.env.P2P_PORT) || 6001;
@@ -104,4 +103,5 @@ const initHttpServer = (port: number) => {
 
 initHttpServer(httpPort);
 initP2PServer(p2pPort);
-initWallet();
+
+const walletIns = new Wallet("./private_key");

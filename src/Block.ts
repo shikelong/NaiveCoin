@@ -1,4 +1,4 @@
-import { Transaction } from "./transaction";
+import { Transaction } from "./transaction/Transaction";
 import { hex2Binary } from "./utils/utils";
 
 export default class Block {
@@ -11,16 +11,6 @@ export default class Block {
     public difficulty: number,
     public nonce: number
   ) {}
-
-  static isValidBlock = (block: Block) => {
-    return (
-      typeof block.index === "number" &&
-      typeof block.hash === "string" &&
-      typeof block.previousHash === "string" &&
-      typeof block.timeStamp === "number" &&
-      typeof block.data === "string"
-    );
-  };
 
   static hashMatchesDifficulty = (hash: string, difficulty: number) => {
     const hashInBinary: string = hex2Binary(hash);

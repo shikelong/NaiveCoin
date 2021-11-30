@@ -1,10 +1,7 @@
 import * as _ from "lodash";
-import {
-  Transaction,
-  TxIn,
-  UnspentTxOut,
-  validateTransaction,
-} from "./transaction";
+import { Transaction, validateTransaction } from "./Transaction";
+import { UnspentTxOut } from "./UnspentTxOut";
+import { TxIn } from "./TxIn";
 
 let transactionPool: Transaction[] = [];
 
@@ -54,7 +51,7 @@ const updateTransactionPool = (unspentTxOuts: UnspentTxOut[]) => {
 };
 
 const getTxPoolIns = (aTransactionPool: Transaction[]): TxIn[] => {
-  return _(aTransactionPool)
+  return _.chain(aTransactionPool)
     .map((tx) => tx.txIns)
     .flatten()
     .value();

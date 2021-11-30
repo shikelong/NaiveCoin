@@ -1,8 +1,8 @@
 import WebSocket, { Server } from "ws";
 import { blockChainInstance } from "../BlockChain";
 import Block from "../Block";
-import { Transaction } from "../Transaction";
-import { getTransactionPool } from "../transactionPool";
+import { Transaction } from "../transaction/Transaction";
+import { getTransactionPool } from "../transaction/TransactionPool";
 
 const sockets: WebSocket[] = [];
 
@@ -96,10 +96,7 @@ const handleBlockchainResponse = (receivedBlocks: Block[]) => {
     return;
   }
   const latestBlockReceived: Block = receivedBlocks[receivedBlocks.length - 1];
-  if (!Block.isValidBlock(latestBlockReceived)) {
-    console.log("block structuture not valid");
-    return;
-  }
+
   const latestBlockHeld: Block = blockChainInstance.getLatestBlock();
   if (latestBlockReceived.index > latestBlockHeld.index) {
     console.log(

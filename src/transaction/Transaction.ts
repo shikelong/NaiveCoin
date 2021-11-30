@@ -1,74 +1,93 @@
-import * as CryptoJS from "crypto-js";
-import * as ecdsa from "elliptic";
 import _ from "lodash";
-
-const ec = new ecdsa.ec("secp256k1");
-
-const COINBASE_AMOUNT: number = 50;
-
-class UnspentTxOut {
-  public readonly txOutId: string;
-  public readonly txOutIndex: number;
-  public readonly address: string;
-  public readonly amount: number;
-
-  constructor(
-    txOutId: string,
-    txOutIndex: number,
-    address: string,
-    amount: number
-  ) {
-    this.txOutId = txOutId;
-    this.txOutIndex = txOutIndex;
-    this.address = address;
-    this.amount = amount;
-  }
-}
-
-class TxOut {
-  //is a ECC public key, It means the private key's owner can accept the coins.
-  public readonly address: string;
-  public readonly amount: number;
-
-  constructor(address: string, amount: number) {
-    this.address = address;
-    this.amount = amount;
-  }
-}
-
-//provide the information: where the coins are from
-// earlier output (coins unlocked) ====> Input
-class TxIn {
-  public txOutId: string;
-  public txOutIndex: number;
-  public signature: string;
-}
+import {
+  getPublicKey,
+  getSignature,
+  importPublicKey,
+} from "../utils/cryptoUtils";
+import { COINBASE_AMOUNT } from "../utils/consts";
+import { TxIn } from "./TxIn";
+import { TxOut } from "./TxOut";
+import { UnspentTxOut } from "./UnspentTxOut";
 
 class Transaction {
   //hash of the transaction contents(ins, outs)
   //txIds will be signed to prevent modified.
-  public id: string;
-  public txIns: TxIn[];
-  public txOuts: TxOut[];
+  private _id: string;
+  get id() {
+    return this._id;
+  }
+  set id(v) {
+    this._id = v;
+  }
+
+  constructor(public txIns: TxIn[], public txOuts: TxOut[]) {
+    this._id = this.generateId();
+  }
+
+  /**
+   * id = Hash(txInContent + txOutContent)
+   */
+  public generateId(): string {
+    const txInContent: string = this.txIns
+      .map((txIn: TxIn) => txIn.txOutId + txIn.txOutIndex)
+      .reduce((a, b) => a + b, "");
+
+    const txOutContent: string = this.txOuts
+      .map((txOut: TxOut) => txOut.address + txOut.amount)
+      .reduce((a, b) => a + b, "");
+
+    return CryptoJS.SHA256(txInContent + txOutContent).toString();
+  }
+
+  public isValid(): boolean {
+    if (typeof this.id !== "string") {
+      console.log("transaction Id missing");
+      return false;
+    }
+    if (!(this.txIns instanceof Array)) {
+      console.log("invalid txIns type in transaction");
+      return false;
+    }
+    if (_.some(this.txIns, (txInput) => !txInput.isValid())) {
+      return false;
+    }
+
+    if (!(this.txOuts instanceof Array)) {
+      console.log("invalid txIns type in transaction");
+      return false;
+    }
+
+    return _.every(this.txOuts, (txOut) => txOut.isValid());
+  }
+
+  /**
+   * 铸币交易
+   * @param address
+   * @param blockIndex
+   */
+  static getCoinbaseTransaction(
+    address: string,
+    blockIndex: number
+  ): Transaction {
+    const txIn: TxIn = new TxIn();
+    txIn.signature = "";
+    txIn.txOutId = "";
+    txIn.txOutIndex = blockIndex;
+
+    const transaction = new Transaction(
+      [txIn],
+      [new TxOut(address, COINBASE_AMOUNT)]
+    );
+    transaction.id = transaction.generateId();
+    return transaction;
+  }
 }
-
-const getTransactionId = (transaction: Transaction): string => {
-  const txInContent: string = transaction.txIns
-    .map((txIn: TxIn) => txIn.txOutId + txIn.txOutIndex)
-    .reduce((a, b) => a + b, "");
-
-  const txOutContent: string = transaction.txOuts
-    .map((txOut: TxOut) => txOut.address + txOut.amount)
-    .reduce((a, b) => a + b, "");
-
-  return CryptoJS.SHA256(txInContent + txOutContent).toString();
-};
 
 export const validateTransaction = (
   transaction: Transaction,
   aUnspentTxOuts: UnspentTxOut[]
 ): boolean => {
-  if (getTransactionId(transaction) !== transaction.id) {
+  if (transaction.generateId() !== transaction.id) {
     console.log("invalid tx id: " + transaction.id);
     return false;
   }
@@ -151,7 +170,7 @@ const validateCoinbaseTx = (
     );
     return false;
   }
-  if (getTransactionId(transaction) !== transaction.id) {
+  if (transaction.generateId() !== transaction.id) {
     console.log("invalid coinbase tx id: " + transaction.id);
     return false;
   }
@@ -188,8 +207,7 @@ const validateTxIn = (
   }
   const address = referencedUTxOut.address;
 
-  const key = ec.keyFromPublic(address, "hex");
-  return key.verify(transaction.id, txIn.signature);
+  return importPublicKey(address).verify(transaction.id, txIn.signature);
 };
 
 const getTxInAmount = (txIn: TxIn, aUnspentTxOuts: UnspentTxOut[]): number => {
@@ -199,27 +217,11 @@ const getTxInAmount = (txIn: TxIn, aUnspentTxOuts: UnspentTxOut[]): number => {
 const findUnspentTxOut = (
   transactionId: string,
   index: number,
-  aUnspentTxOuts: UnspentTxOut[]
+  uxtos: UnspentTxOut[]
 ): UnspentTxOut => {
-  return aUnspentTxOuts.find(
-    (uTxO) => uTxO.txOutId === transactionId && uTxO.txOutIndex === index
+  return uxtos.find(
+    (uxto) => uxto.txOutId === transactionId && uxto.txOutIndex === index
   );
-};
-
-const getCoinbaseTransaction = (
-  address: string,
-  blockIndex: number
-): Transaction => {
-  const t = new Transaction();
-  const txIn: TxIn = new TxIn();
-  txIn.signature = "";
-  txIn.txOutId = "";
-  txIn.txOutIndex = blockIndex;
-
-  t.txIns = [txIn];
-  t.txOuts = [new TxOut(address, COINBASE_AMOUNT)];
-  t.id = getTransactionId(t);
-  return t;
 };
 
 const signTxIn = (
@@ -240,19 +242,15 @@ const signTxIn = (
     console.log("could not find referenced txOut");
     throw Error();
   }
-  const referencedAddress = referencedUnspentTxOut.address;
-
-  if (getPublicKey(privateKey) !== referencedAddress) {
+  if (getPublicKey(privateKey) !== referencedUnspentTxOut.address) {
     console.log(
       "trying to sign an input with private" +
         " key that does not match the address that is referenced in txIn"
     );
     throw Error();
   }
-  const key = ec.keyFromPrivate(privateKey, "hex");
-  const signature: string = toHexString(key.sign(dataToSign).toDER());
 
-  return signature;
+  return getSignature(privateKey, dataToSign);
 };
 
 const updateUnspentTxOuts = (
@@ -287,7 +285,7 @@ const processTransactions = (
   aUnspentTxOuts: UnspentTxOut[],
   blockIndex: number
 ) => {
-  if (!isValidTransactionsStructure(aTransactions)) {
+  if (_.some(aTransactions, (tx) => !tx.isValid())) {
     return null;
   }
 
@@ -298,112 +296,4 @@ const processTransactions = (
   return updateUnspentTxOuts(aTransactions, aUnspentTxOuts);
 };
 
-const toHexString = (byteArray): string => {
-  return Array.from(byteArray, (byte: any) => {
-    return ("0" + (byte & 0xff).toString(16)).slice(-2);
-  }).join("");
-};
-
-const getPublicKey = (aPrivateKey: string): string => {
-  return ec.keyFromPrivate(aPrivateKey, "hex").getPublic().encode("hex", false);
-};
-
-const isValidTxInStructure = (txIn: TxIn): boolean => {
-  if (txIn == null) {
-    console.log("txIn is null");
-    return false;
-  } else if (typeof txIn.signature !== "string") {
-    console.log("invalid signature type in txIn");
-    return false;
-  } else if (typeof txIn.txOutId !== "string") {
-    console.log("invalid txOutId type in txIn");
-    return false;
-  } else if (typeof txIn.txOutIndex !== "number") {
-    console.log("invalid txOutIndex type in txIn");
-    return false;
-  } else {
-    return true;
-  }
-};
-
-const isValidTxOutStructure = (txOut: TxOut): boolean => {
-  if (txOut == null) {
-    console.log("txOut is null");
-    return false;
-  } else if (typeof txOut.address !== "string") {
-    console.log("invalid address type in txOut");
-    return false;
-  } else if (!isValidAddress(txOut.address)) {
-    console.log("invalid TxOut address");
-    return false;
-  } else if (typeof txOut.amount !== "number") {
-    console.log("invalid amount type in txOut");
-    return false;
-  } else {
-    return true;
-  }
-};
-
-const isValidTransactionsStructure = (transactions: Transaction[]): boolean => {
-  return transactions
-    .map(isValidTransactionStructure)
-    .reduce((a, b) => a && b, true);
-};
-
-const isValidTransactionStructure = (transaction: Transaction) => {
-  if (typeof transaction.id !== "string") {
-    console.log("transactionId missing");
-    return false;
-  }
-  if (!(transaction.txIns instanceof Array)) {
-    console.log("invalid txIns type in transaction");
-    return false;
-  }
-  if (
-    !transaction.txIns.map(isValidTxInStructure).reduce((a, b) => a && b, true)
-  ) {
-    return false;
-  }
-
-  if (!(transaction.txOuts instanceof Array)) {
-    console.log("invalid txIns type in transaction");
-    return false;
-  }
-
-  if (
-    !transaction.txOuts
-      .map(isValidTxOutStructure)
-      .reduce((a, b) => a && b, true)
-  ) {
-    return false;
-  }
-  return true;
-};
-
-//valid address is a valid ecdsa public key in the 04 + X-coordinate + Y-coordinate format
-const isValidAddress = (address: string): boolean => {
-  if (address.length !== 130) {
-    console.log("invalid public key length");
-    return false;
-  } else if (address.match("^[a-fA-F0-9]+$") === null) {
-    console.log("public key must contain only hex characters");
-    return false;
-  } else if (!address.startsWith("04")) {
-    console.log("public key must start with 04");
-    return false;
-  }
-  return true;
-};
-
-export {
-  isValidAddress,
-  processTransactions,
-  signTxIn,
-  getTransactionId,
-  UnspentTxOut,
-  TxIn,
-  TxOut,
-  getCoinbaseTransaction,
-  getPublicKey,
-  Transaction,
-};
+export { processTransactions, signTxIn, Transaction };
