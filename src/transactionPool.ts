@@ -54,7 +54,7 @@ const updateTransactionPool = (unspentTxOuts: UnspentTxOut[]) => {
 };
 
 const getTxPoolIns = (aTransactionPool: Transaction[]): TxIn[] => {
-  return _(aTransactionPool)
+  return _.chain(aTransactionPool)
     .map((tx) => tx.txIns)
     .flatten()
     .value();
