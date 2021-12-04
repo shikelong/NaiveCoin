@@ -1,4 +1,4 @@
-import { isValidAddress } from "./Transaction";
+import { isValidAddress } from "../utils/cryptoUtils";
 
 class TxOut {
   //address is a ECC public key, It means the private key's owner can accept the coins.

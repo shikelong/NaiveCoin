@@ -8,6 +8,7 @@ import { COINBASE_AMOUNT } from "../utils/consts";
 import { TxIn } from "./TxIn";
 import { TxOut } from "./TxOut";
 import { UnspentTxOut } from "./UnspentTxOut";
+import CryptoJS from "crypto-js";
 
 class Transaction {
   //hash of the transaction contents(ins, outs)
@@ -20,8 +21,18 @@ class Transaction {
     this._id = v;
   }
 
-  constructor(public txIns: TxIn[], public txOuts: TxOut[]) {
-    this._id = this.generateId();
+  public txIns: TxIn[];
+  public txOuts: TxOut[];
+
+  constructor();
+  constructor(_txIns: TxIn[], _txOuts: TxOut[]);
+  constructor(_txIns?: TxIn[], _txOuts?: TxOut[]) {
+    if (_txIns && _txOuts) {
+      this.txIns = _txIns ?? [];
+      this.txOuts = _txOuts ?? [];
+      this._id = this.generateId();
+    } else {
+    }
   }
 
   /**

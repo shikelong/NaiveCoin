@@ -174,3 +174,6 @@ const createTxOuts = (
   }
   return txOuts;
 };
+
+export const walletIns = new Wallet("./private_key");
+

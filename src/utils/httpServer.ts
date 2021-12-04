@@ -5,6 +5,9 @@ import { connectToPeers, getSockets, initP2PServer } from "./p2p";
 import { blockChainInstance } from "../BlockChain";
 import Wallet, { getBalance } from "../transaction/Wallet";
 import { getTransactionPool } from "../transaction/TransactionPool";
+import { Transaction } from "../transaction/Transaction";
+import { TxOut } from "../transaction/TxOut";
+import { TxIn } from "../transaction/TxIn";
 
 const httpPort: number = parseInt(process.env.HTTP_PORT) || 3001;
 const p2pPort: number = parseInt(process.env.P2P_PORT) || 6001;
@@ -18,7 +21,23 @@ const initHttpServer = (port: number) => {
     res.send(blockChainInstance.blocks);
   });
   app.post("/mineBlock", (req, res) => {
-    const newBlock: Block = blockChainInstance.generateNextBlock(req.body.data);
+
+    const txs = req.body.data.map((item) => {
+      const transactions = new Transaction();
+      transactions.txOuts = item.txOuts.map((to) => {
+        return new TxOut(to.address, to.amount);
+      });
+      transactions.txIns = item.txIns.map((txIn) => {
+        const newIn = new TxIn();
+        newIn.txOutId = txIn.txOutId;
+        newIn.txOutIndex = txIn.txOutIndex;
+        newIn.signature = txIn.signature;
+      });
+      transactions.id = item.id;
+      return transactions
+    })
+
+    const newBlock: Block = blockChainInstance.generateNextBlock(txs);
     res.send(newBlock);
   });
   app.get("/peers", (req, res) => {
@@ -103,5 +122,3 @@ const initHttpServer = (port: number) => {
 
 initHttpServer(httpPort);
 initP2PServer(p2pPort);
-
-const walletIns = new Wallet("./private_key");

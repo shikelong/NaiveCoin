@@ -6,15 +6,8 @@ import {
   DIFFICULTY_ADJUSTMENT_INTERVAL,
   GENESIS_BLOCK,
 } from "./utils/consts";
-import {
-
-  processTransactions,
-  Transaction,
-} from "./transaction/Transaction";
-import Wallet, {
-  getPrivateFromWallet,
-  getPublicFromWallet,
-} from "./transaction/Wallet";
+import { processTransactions, Transaction } from "./transaction/Transaction";
+import Wallet, { walletIns } from "./transaction/Wallet";
 import {
   addToTransactionPool,
   getTransactionPool,
@@ -98,7 +91,7 @@ export default class BlockChain {
     const tx: Transaction = Wallet.createTransaction(
       address,
       amount,
-      getPrivateFromWallet(),
+      walletIns.getPrivateKey(),
       this.unspentTxOuts,
       getTransactionPool()
     );
@@ -131,14 +124,14 @@ export default class BlockChain {
       throw new Error("invalid amount");
     }
 
-    const coinbaseTx = getCoinbaseTransaction(
-      getPublicFromWallet(),
+    const coinbaseTx = Transaction.getCoinbaseTransaction(
+      walletIns.getPublicKey(),
       this.getLatestBlock().index + 1
     );
-    const tx: Transaction = createTransaction(
+    const tx: Transaction = Wallet.createTransaction(
       receiverAddress,
       amount,
-      getPrivateFromWallet(),
+      walletIns.getPrivateKey(),
       this.unspentTxOuts,
       getTransactionPool()
     );
